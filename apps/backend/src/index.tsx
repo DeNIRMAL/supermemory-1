@@ -1,4 +1,6 @@
 import { z } from "zod";
+import * as cheerio from "cheerio";
+import { NodeHtmlMarkdown } from "node-html-markdown";
 import { type Context, Hono } from "hono";
 import { auth } from "./auth";
 import { logger } from "hono/logger";
@@ -178,45 +180,65 @@ app.get("/v1/markdown", async (c) => {
   }
 
   try {
-    // Base markdown extraction via r.jina.ai (fast, robust)
-    const jinaResp = await fetch(`https://r.jina.ai/${inputUrl}`, {
-      redirect: "follow",
-    });
-    if (!jinaResp.ok) {
-      const body = await jinaResp.text();
-      return c.json({ error: `Failed to fetch readable content`, statusText: jinaResp.statusText, body }, 502);
+    // 1) Fetch HTML directly
+    const resp = await fetch(inputUrl, { redirect: "follow" });
+    if (!resp.ok) {
+      const body = await resp.text();
+      return c.json({ error: `Failed to fetch HTML`, statusText: resp.statusText, body }, 502);
     }
-    const markdown = await jinaResp.text();
+    const html = await resp.text();
 
-    // Fetch metadata via markdowner's public endpoint for now
-    let metadata: Record<string, unknown> | null = null;
-    try {
-      const metaResp = await fetch(`https://md.dhr.wtf/metadata?url=${encodeURIComponent(inputUrl)}`);
-      if (metaResp.ok) {
-        metadata = await metaResp.json();
-      }
-    } catch {}
+    // 2) Convert to Markdown (simple, fast). For complex sites, we could add readability later
+    const nhm = new NodeHtmlMarkdown({ useLinkReferenceDefinitions: false });
+    const markdown = nhm.translate(html);
 
-    // Optional: placeholder for LLM filtering if enabled
+    // 3) Extract metadata locally (no third-party)
+    const $ = cheerio.load(html);
+    const baseHref = $('base').attr('href');
+    const baseUrl = baseHref ? new URL(baseHref, inputUrl).toString() : inputUrl;
+
+    const candidates: Array<{ src: string; weight: number }> = [];
+    const push = (src?: string | null, weight = 0) => {
+      if (!src) return;
+      try { candidates.push({ src: new URL(src, baseUrl).toString(), weight }); } catch {}
+    };
+    push($('meta[property="og:image"]').attr('content'), 100);
+    push($('meta[name="og:image"]').attr('content'), 95);
+    push($('meta[property="twitter:image"]').attr('content'), 90);
+    push($('meta[name="twitter:image"]').attr('content'), 85);
+    push($('meta[name="thumbnail"]').attr('content'), 80);
+    push($('link[rel="image_src"]').attr('href'), 70);
+    push($('img[itemprop="image"]').attr('src'), 60);
+    $('img').each((_, el) => {
+      const src = $(el).attr('src');
+      const w = parseInt($(el).attr('width') || '0', 10);
+      const h = parseInt($(el).attr('height') || '0', 10);
+      const weight = w * h >= 40000 ? 50 : 20;
+      push(src, weight);
+    });
+    const unique = new Map<string, number>();
+    for (const { src, weight } of candidates) {
+      unique.set(src, Math.max(unique.get(src) ?? 0, weight));
+    }
+    const image = Array.from(unique.entries()).sort((a, b) => b[1] - a[1]).map(([s]) => s)[0] || "";
+
+    let favicon = $('link[rel="icon"]').attr('href') || $('link[rel="shortcut icon"]').attr('href') || $('link[rel="apple-touch-icon"]').attr('href') || '/favicon.ico';
+    try { favicon = new URL(favicon, baseUrl).toString(); } catch {}
+
+    const metadata = {
+      title: $('meta[property="og:title"]').attr('content') || $('meta[name="og:title"]').attr('content') || $('title').text() || "",
+      description: $('meta[property="og:description"]').attr('content') || $('meta[name="description"]').attr('content') || "",
+      image,
+      favicon,
+    };
+
     const finalMarkdown = llmFilter ? markdown : markdown;
 
     if (format === "text" || c.req.header("accept")?.includes("text/plain")) {
-      return new Response(finalMarkdown, {
-        headers: { "content-type": "text/plain; charset=utf-8" },
-      });
+      return new Response(finalMarkdown, { headers: { "content-type": "text/plain; charset=utf-8" } });
     }
 
-    return c.json({
-      url: inputUrl,
-      markdown: finalMarkdown,
-      metadata,
-      options: {
-        llmFilter,
-        enableDetailedResponse,
-        crawlSubpages,
-      },
-      fetchedAt: new Date().toISOString(),
-    });
+    return c.json({ url: inputUrl, markdown: finalMarkdown, metadata, fetchedAt: new Date().toISOString() });
   } catch (error) {
     return c.json({ error: (error as Error).message }, 500);
   }

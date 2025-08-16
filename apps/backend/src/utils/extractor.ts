@@ -9,21 +9,34 @@ export const extractPageContent = async (content: string, env: Env) => {
     );
   }
 
-  const metadataResp = await fetch(`https://md.dhr.wtf/metadata?url=${content}`);
-
-  if (!metadataResp.ok) {
-    throw new Error(
-      `Failed to fetch metadata for ${content}: ${metadataResp.statusText}` +
-        (await metadataResp.text())
-    );
-  }
-
-  const metadata = await metadataResp.json() as {
+  // Try multiple metadata endpoints with graceful fallback (avoid CF challenges in dev)
+  let metadata: {
     title?: string;
     description?: string;
     image?: string;
     favicon?: string;
-  };
+  } = {};
+
+  const metadataEndpoints: string[] = [
+    ...(env.NODE_ENV === "development"
+      ? [`http://localhost:3000/api/metadata?url=${encodeURIComponent(content)}`]
+      : []),
+    `https://md.dhr.wtf/metadata?url=${encodeURIComponent(content)}`,
+  ];
+
+  for (const endpoint of metadataEndpoints) {
+    try {
+      const metadataResp = await fetch(endpoint);
+      if (!metadataResp.ok) {
+        continue;
+      }
+      const data = (await metadataResp.json()) as typeof metadata;
+      metadata = data || {};
+      break;
+    } catch (_) {
+      // ignore and try next
+    }
+  }
 
   const responseText = await resp.text();
 
