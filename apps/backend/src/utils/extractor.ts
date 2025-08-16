@@ -1,11 +1,13 @@
 import { Env } from "../types";
+import { NodeHtmlMarkdown } from "node-html-markdown";
 
 export const extractPageContent = async (content: string, env: Env) => {
-  const resp = await fetch(`https://r.jina.ai/${content}`);
+  // Fetch raw HTML directly and convert to Markdown locally to avoid third-party rate limits
+  const pageResp = await fetch(content, { redirect: "follow" });
 
-  if (!resp.ok) {
+  if (!pageResp.ok) {
     throw new Error(
-      `Failed to fetch ${content}: ${resp.statusText}` + (await resp.text())
+      `Failed to fetch ${content}: ${pageResp.statusText}` + (await pageResp.text())
     );
   }
 
@@ -38,7 +40,9 @@ export const extractPageContent = async (content: string, env: Env) => {
     }
   }
 
-  const responseText = await resp.text();
+  const html = await pageResp.text();
+  const nhm = new NodeHtmlMarkdown({ useLinkReferenceDefinitions: false });
+  const responseText = nhm.translate(html);
 
   try {
     const json:  {
