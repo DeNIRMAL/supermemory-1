@@ -94,7 +94,13 @@ export const auth = async (
         },
       };
 
-      const session = await getSessionFromRequest(c.req.raw, context);
+      let session: any = null;
+      try {
+        session = await getSessionFromRequest(c.req.raw, context);
+      } catch (err) {
+        // In local dev, cookie parsing may fail due to invalid cookie domain/url; don't fail the request
+        console.warn("Session parsing failed, proceeding unauthenticated:", (err as Error)?.message);
+      }
       console.log("Session", session);
       c.set("session", session);
 
