@@ -31,30 +31,69 @@ app.get("/api/metadata", async (c) => {
 
 	// If not cached, fetch and parse metadata
 	try {
-		const response = await fetch(url);
+		const response = await fetch(url, { redirect: "follow" });
 		const html = await response.text();
 		const $ = cheerio.load(html);
 
-		// Try multiple image selectors in order of preference
-		const image =
-			$('meta[property="og:image"]').attr("content") ||
-			$('meta[property="twitter:image"]').attr("content") ||
-			$('meta[name="thumbnail"]').attr("content") ||
-			$('link[rel="image_src"]').attr("href") ||
-			$('img[itemprop="image"]').attr("src") ||
-			$("img").first().attr("src") ||
-			"";
+		// Derive base for absolute URL resolution
+		const baseHref = $('base').attr('href');
+		const baseUrl = baseHref ? new URL(baseHref, url).toString() : url;
 
-		// Convert relative image URLs to absolute
-		const absoluteImage = image ? new URL(image, url).toString() : "";
+		// Collect candidate images with preference weights
+		const candidates: Array<{ src: string; weight: number }> = [];
+		const pushCandidate = (src?: string | null, weight = 0) => {
+			if (!src) return;
+			try {
+				const absolute = new URL(src, baseUrl).toString();
+				candidates.push({ src: absolute, weight });
+			} catch {}
+		};
+
+		pushCandidate($('meta[property="og:image"]').attr('content'), 100);
+		pushCandidate($('meta[name="og:image"]').attr('content'), 95);
+		pushCandidate($('meta[property="twitter:image"]').attr('content'), 90);
+		pushCandidate($('meta[name="twitter:image"]').attr('content'), 85);
+		pushCandidate($('meta[name="thumbnail"]').attr('content'), 80);
+		pushCandidate($('link[rel="image_src"]').attr('href'), 70);
+		pushCandidate($('img[itemprop="image"]').attr('src'), 60);
+
+		// Fallback: pick first reasonably sized <img>
+		$('img').each((_, el) => {
+			const src = $(el).attr('src');
+			const widthAttr = $(el).attr('width');
+			const heightAttr = $(el).attr('height');
+			const width = widthAttr ? parseInt(widthAttr, 10) : 0;
+			const height = heightAttr ? parseInt(heightAttr, 10) : 0;
+			const area = width * height;
+			const weight = area >= 40000 ? 50 : 20; // prefer larger images
+			pushCandidate(src, weight);
+		});
+
+		// De-dup and select highest weight
+		const unique = new Map<string, number>();
+		for (const { src, weight } of candidates) {
+			unique.set(src, Math.max(unique.get(src) ?? 0, weight));
+		}
+		const image = Array.from(unique.entries())
+			.sort((a, b) => b[1] - a[1])
+			.map(([src]) => src)[0] || "";
+
+		// Favicon
+		let favicon =
+			$('link[rel="icon"]').attr('href') ||
+			$('link[rel="shortcut icon"]').attr('href') ||
+			$('link[rel="apple-touch-icon"]').attr('href') ||
+			"/favicon.ico";
+		try { favicon = new URL(favicon, baseUrl).toString(); } catch {}
 
 		const metadata = {
-			title: $("title").text() || $('meta[property="og:title"]').attr("content") || "",
+			title: $('meta[property="og:title"]').attr('content') || $('meta[name="og:title"]').attr('content') || $("title").text() || "",
 			description:
-				$('meta[name="description"]').attr("content") ||
-				$('meta[property="og:description"]').attr("content") ||
+				$('meta[property="og:description"]').attr('content') ||
+				$('meta[name="description"]').attr('content') ||
 				"",
-			image: absoluteImage,
+			image: image,
+			favicon,
 		};
 
 		// Cache the metadata

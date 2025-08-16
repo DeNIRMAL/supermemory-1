@@ -165,6 +165,63 @@ app.get("/v1/session", (c) => {
   });
 });
 
+// Markdowner-like endpoint: converts a URL to markdown and returns optional metadata
+app.get("/v1/markdown", async (c) => {
+  const inputUrl = c.req.query("url");
+  const format = c.req.query("format"); // "text" or "json" (default)
+  const llmFilter = c.req.query("llmFilter") === "true"; // accepted for API parity; currently noop
+  const enableDetailedResponse = c.req.query("enableDetailedResponse") === "true"; // noop for parity
+  const crawlSubpages = c.req.query("crawlSubpages") === "true"; // noop for parity
+
+  if (!inputUrl) {
+    return c.json({ error: "Missing 'url' query parameter" }, 400);
+  }
+
+  try {
+    // Base markdown extraction via r.jina.ai (fast, robust)
+    const jinaResp = await fetch(`https://r.jina.ai/${inputUrl}`, {
+      redirect: "follow",
+    });
+    if (!jinaResp.ok) {
+      const body = await jinaResp.text();
+      return c.json({ error: `Failed to fetch readable content`, statusText: jinaResp.statusText, body }, 502);
+    }
+    const markdown = await jinaResp.text();
+
+    // Fetch metadata via markdowner's public endpoint for now
+    let metadata: Record<string, unknown> | null = null;
+    try {
+      const metaResp = await fetch(`https://md.dhr.wtf/metadata?url=${encodeURIComponent(inputUrl)}`);
+      if (metaResp.ok) {
+        metadata = await metaResp.json();
+      }
+    } catch {}
+
+    // Optional: placeholder for LLM filtering if enabled
+    const finalMarkdown = llmFilter ? markdown : markdown;
+
+    if (format === "text" || c.req.header("accept")?.includes("text/plain")) {
+      return new Response(finalMarkdown, {
+        headers: { "content-type": "text/plain; charset=utf-8" },
+      });
+    }
+
+    return c.json({
+      url: inputUrl,
+      markdown: finalMarkdown,
+      metadata,
+      options: {
+        llmFilter,
+        enableDetailedResponse,
+        crawlSubpages,
+      },
+      fetchedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json({ error: (error as Error).message }, 500);
+  }
+});
+
 app.post(
   "/waitlist",
   zValidator(
