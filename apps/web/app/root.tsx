@@ -135,13 +135,13 @@ const App = React.memo(function App() {
 	const [theme] = useTheme();
 
 	return (
-		<html lang="en" data-theme={theme ?? "light"}>
+		<html lang="en" data-theme={theme ?? "light"} suppressHydrationWarning>
 			<head>
 				<Meta />
 				<Links />
 				<NonFlashOfWrongThemeEls ssrTheme={Boolean(data.theme)} />
 			</head>
-			<body className={theme ?? ""}>
+			<body className={theme ?? ""} suppressHydrationWarning>
 				<Outlet />
 				<ScrollRestoration />
 				<Scripts />

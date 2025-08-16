@@ -18,6 +18,7 @@ function Reminder({ content, contentId }: { content: string; contentId: string }
 	const [isExpanded, setIsExpanded] = useState(false);
 	const [isOverflowing, setIsOverflowing] = useState(false);
 	const contentRef = React.useRef<HTMLDivElement>(null);
+	const [isHydrated, setIsHydrated] = useState(false);
 
 	useEffect(() => {
 		if (contentRef.current) {
@@ -25,7 +26,11 @@ function Reminder({ content, contentId }: { content: string; contentId: string }
 		}
 	}, [content]);
 
-	if (typeof window === "undefined") return null;
+	useEffect(() => {
+		setIsHydrated(true);
+	}, []);
+
+	if (!isHydrated) return null;
 
 	return (
 		<div
@@ -113,12 +118,17 @@ function Reminders() {
 	const [currentIndex, setCurrentIndex] = useState(0);
 	const [isLoading, setIsLoading] = useState(true);
 	const navigate = useNavigate();
+	const [isHydrated, setIsHydrated] = useState(false);
+
+	useEffect(() => {
+		setIsHydrated(true);
+	}, []);
 
 	useEffect(() => {
 		fetch(`/backend/v1/suggested-learnings`, {
 			credentials: "include",
 		})
-			.then((res) => res.json() as Promise<{ suggestedLearnings: Array<Record<string, string>> }>)
+			.then((res) => res.json() as Promise<{ suggestedLearnings: Array<Record<string, string>> }> )
 			.then((data) => {
 				setSuggestedLearnings(data.suggestedLearnings);
 				setIsLoading(false);
@@ -129,7 +139,13 @@ function Reminders() {
 			});
 	}, []);
 
-	if (typeof window === "undefined") return null;
+	if (!isHydrated) {
+		return (
+			<div className="relative h-[600px] w-full flex items-center justify-center">
+				<LoadingReminder />
+			</div>
+		);
+	}
 
 	const handleDragEnd = (event: any, info: any) => {
 		const DRAG_THRESHOLD = window?.innerWidth * 0.15;
@@ -216,8 +232,6 @@ function Reminders() {
 
 							if (position >= 3) return null;
 
-							if (typeof window === "undefined") return null;
-
 							const contentId = Object.keys(learning)[0];
 							const content = learning[contentId];
 
@@ -258,12 +272,12 @@ function Reminders() {
 									whileHover={
 										position === 0 && window?.innerWidth >= 768
 											? {
-													transition: {
-														duration: 0.3,
-														ease: [0.4, 0, 0.2, 1],
-													},
-												}
-											: undefined
+												transition: {
+													duration: 0.3,
+													ease: [0.4, 0, 0.2, 1],
+												},
+											}
+										: undefined
 									}
 									role="group"
 									aria-label={`Memory card ${index + 1} of ${suggestedLearnings.length}`}

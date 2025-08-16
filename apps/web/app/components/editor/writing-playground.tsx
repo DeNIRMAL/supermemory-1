@@ -27,9 +27,9 @@ const EditorContainer = memo(EditorContainerImport);
 const Editor = memo(EditorImport);
 
 export function WritingPlayground() {
-	if (typeof window === "undefined") {
-		return <div>Loading...</div>;
-	}
+	const [isHydrated, setIsHydrated] = useState(false);
+	useEffect(() => setIsHydrated(true), []);
+	if (!isHydrated) return null;
 	const localValue = localStorage.getItem("editorContent");
 	const editor = useCreateEditor({ initialValue: localValue ? JSON.parse(localValue) : undefined });
 
