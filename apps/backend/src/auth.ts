@@ -51,33 +51,35 @@ export const auth = async (
 
   // Check for API key authentication first
   const authHeader = c.req.raw.headers.get("Authorization");
-  if (authHeader?.startsWith("Bearer ")) {
+  if (authHeader?.startsWith("Bearer ") && authHeader.length > 7) {
     const apiKey = authHeader.slice(7);
-    try {
-      const { userId, lastApiKeyGeneratedAt } = await decryptApiKey(apiKey, c);
-      
-      // Look up user with matching id and lastApiKeyGeneratedAt
-      user = await database(c.env.HYPERDRIVE.connectionString)
-        .select()
-        .from(users)
-        .where(
-          and(
-            eq(users.uuid, userId)
+    if (apiKey && apiKey.trim() !== "") {
+      try {
+        const { userId, lastApiKeyGeneratedAt } = await decryptApiKey(apiKey, c);
+        
+        // Look up user with matching id and lastApiKeyGeneratedAt
+        user = await database(c.env.HYPERDRIVE.connectionString)
+          .select()
+          .from(users)
+          .where(
+            and(
+              eq(users.uuid, userId)
+            )
           )
-        )
-        .limit(1);
+          .limit(1);
 
-      if (user && Array.isArray(user)) {
-        user = user[0];
-        if (user && user.lastApiKeyGeneratedAt?.getTime() === Number(lastApiKeyGeneratedAt)) {
-          c.set("user", user);
-        } else {
-          return c.json({ error: "Invalid API key - user not found" }, 401);
+        if (user && Array.isArray(user)) {
+          user = user[0];
+          if (user && user.lastApiKeyGeneratedAt?.getTime() === Number(lastApiKeyGeneratedAt)) {
+            c.set("user", user);
+          } else {
+            return c.json({ error: "Invalid API key - user not found" }, 401);
+          }
         }
+      } catch (err) {
+        console.error("API key authentication failed:", err);
+        return c.json({ error: "Invalid API key format" }, 401);
       }
-    } catch (err) {
-      console.error("API key authentication failed:", err);
-      return c.json({ error: "Invalid API key format" }, 401);
     }
   }
 
@@ -137,6 +139,26 @@ export const auth = async (
   // Check if request requires authentication
   const isPublicSpaceRequest =
     c.req.url.includes("/v1/spaces/") || c.req.url.includes("/v1/memories");
+
+  // Development bypass - allow unauthenticated access in development
+  if (c.env.NODE_ENV === "development" && !c.get("user")) {
+    console.log("Development mode: allowing unauthenticated access to", c.req.url);
+    // Create a mock user for development
+    const mockUser = {
+      id: 1,
+      uuid: "dev-user-123",
+      email: "dev@example.com",
+      firstName: "Dev",
+      lastName: "User",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      emailVerified: true,
+      profilePictureUrl: "",
+      lastApiKeyGeneratedAt: new Date(),
+    };
+    c.set("user", mockUser);
+    return next();
+  }
 
   if (!isPublicSpaceRequest && !c.get("user")) {
     console.log("Unauthorized access to", c.req.url);

@@ -17,21 +17,20 @@ import { fromHono } from "chanfana";
 const spacesRoute = fromHono(
   new Hono<{ Variables: Variables; Bindings: Env }>())
   .get("/", async (c) => {
-    const user = c.get("user");
-    if (!user) {
-      return c.json({ error: "Unauthorized" }, 401);
-    }
+    try {
+      const user = c.get("user");
+      if (!user) {
+        return c.json({ error: "Unauthorized" }, 401);
+      }
 
-    const db = database(c.env.HYPERDRIVE.connectionString);
+      const db = database(c.env.HYPERDRIVE.connectionString);
 
-    const [allSpaces, savedSpacesList, spaceOwners] = await Promise.all([
+      const [allSpaces, savedSpacesList, spaceOwners] = await Promise.all([
       db
         .select({
           id: spaces.id,
           uuid: spaces.uuid,
-          name: sql<string>`REGEXP_REPLACE(${spaces.name}, E'[\\n\\r]+', ' ', 'g')`.as(
-            "name"
-          ),
+          name: spaces.name,
           ownerId: spaces.ownerId,
           isPublic: spaces.isPublic,
           createdAt: spaces.createdAt,
@@ -68,10 +67,10 @@ const spacesRoute = fromHono(
         .innerJoin(spaces, eq(spaces.ownerId, users.id)),
     ]);
 
-    const savedSpaceIds = new Set(savedSpacesList.map((s) => s.spaceId));
-    const ownerMap = new Map(spaceOwners.map((owner) => [owner.id, owner]));
+      const savedSpaceIds = new Set(savedSpacesList.map((s) => s.spaceId));
+      const ownerMap = new Map(spaceOwners.map((owner) => [owner.id, owner]));
 
-    const spacesWithDetails = allSpaces.map((space) => {
+      const spacesWithDetails = allSpaces.map((space) => {
       const isOwner = space.ownerId === user.id;
       const owner = ownerMap.get(space.ownerId);
 
@@ -94,7 +93,11 @@ const spacesRoute = fromHono(
       };
     });
 
-    return c.json({ spaces: spacesWithDetails });
+      return c.json({ spaces: spacesWithDetails });
+    } catch (error) {
+      console.error("Error in spaces route:", error);
+      return c.json({ error: "Internal server error" }, 500);
+    }
   })
   .get("/:spaceId", async (c) => {
     const user = c.get("user");

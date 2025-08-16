@@ -28,8 +28,7 @@ import "@fontsource/geist-sans/800.css";
 import "@fontsource/geist-sans/900.css";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "sonner";
-import posthog from "posthog-js";
-import { PostHogProvider, usePostHog} from 'posthog-js/react'
+import { PostHogProvider } from 'posthog-js/react'
 
 const queryClient = new QueryClient();
 
@@ -134,21 +133,6 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 const App = React.memo(function App() {
 	const data = useLoaderData<typeof loader>();
 	const [theme] = useTheme();
-	const posthog = usePostHog();
-
-	useEffect(() => {
-		if (data.user) {
-			posthog.init("phc_TUn1bVeAZudbPn2mluA2iukyln3QSyHD0F1AbzYow5A", {
-				api_host: "https://us.i.posthog.com",
-				person_profiles: "identified_only",
-			});
-			posthog.identify(data.user.id, {
-				email: data.user.email,
-				firstName: data.user.firstName,
-				lastName: data.user.lastName,
-			});
-		}
-	}, [data.user]);
 
 	return (
 		<html lang="en" data-theme={theme ?? "light"}>
@@ -178,7 +162,22 @@ export default function AppWithProviders() {
 	const data = useLoaderData<typeof loader>()
 
 	return (
-		<PostHogProvider client={posthog}>
+		<PostHogProvider 
+			apiKey="phc_TUn1bVeAZudbPn2mluA2iukyln3QSyHD0F1AbzYow5A"
+			options={{
+				api_host: "https://us.i.posthog.com",
+				person_profiles: "identified_only",
+			}}
+			loaded={(posthog) => {
+				if (data.user) {
+					posthog.identify(data.user.id, {
+						email: data.user.email,
+						firstName: data.user.firstName,
+						lastName: data.user.lastName,
+					});
+				}
+			}}
+		>
 			<KeyboardProvider>
 				<QueryClientProvider client={queryClient}>
 					<ThemeProvider specifiedTheme={data.theme}>

@@ -1,4 +1,4 @@
-CREATE EXTENSION IF NOT EXISTS vectorscale CASCADE;
+CREATE EXTENSION IF NOT EXISTS vector CASCADE;
 
 CREATE TABLE IF NOT EXISTS "chat_threads" (
 	"id" bigserial PRIMARY KEY NOT NULL,
@@ -169,7 +169,7 @@ END $$;
 CREATE INDEX IF NOT EXISTS "chat_threads_user_idx" ON "chat_threads" USING btree ("user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "chunk_id_idx" ON "chunks" USING btree ("id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "chunk_document_id_idx" ON "chunks" USING btree ("document_id");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "embeddingIndex" ON "chunks" USING diskann ("embeddings" vector_cosine_ops);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "embeddingIndex" ON "chunks" USING hnsw ("embeddings" vector_cosine_ops);--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "content_id_space_id_unique" ON "content_to_space" USING btree ("content_id","space_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "document_id_idx" ON "documents" USING btree ("id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "document_uuid_idx" ON "documents" USING btree ("uuid");--> statement-breakpoint

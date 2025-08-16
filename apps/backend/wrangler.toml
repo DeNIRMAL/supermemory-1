@@ -23,20 +23,25 @@ binding = "CONTENT_WORKFLOW"
 class_name = "ContentWorkflow"
 
 
+[[r2_buckets]]
+binding = "IMAGES_BUCKET"
+bucket_name = "supermemory-images"
+preview_bucket_name = "supermemory-images"
+
 [[kv_namespaces]]
 binding= "MD_CACHE"
-id = "3186489f943d409a9b772d876a58a73e"
-preview_id = "3186489f943d409a9b772d876a58a73e"
+id = "cac3a234a4374158b3b42a3ab4dd568d"
+preview_id = "cac3a234a4374158b3b42a3ab4dd568d"
 
 [[kv_namespaces]]
 binding = "ENCRYPTED_TOKENS"
-id = "a1f048ee14644468ad63b817b5648a31"
-preview_id = "a1f048ee14644468ad63b817b5648a31"
+id = "62a7415a6e8f4ee2bdc0b308c3666838"
+preview_id = "62a7415a6e8f4ee2bdc0b308c3666838"
 
 [[hyperdrive]]
 binding = "HYPERDRIVE"
-id = "3a377d1b9c084e698ee201f10dfa8131"
-localConnectionString = "postgres://postgres:postgres@localhost:5432/supermemorylocal?sslmode=require"
+id = "51da5594ec86434c8c2375c15935440c"
+localConnectionString = "postgresql://postgres:%40Gmail12345@db.sdohppbkaordjydyhwqf.supabase.co:5432/postgres"
 
 [[unsafe.bindings]]
 name = "EMAIL_LIMITER"

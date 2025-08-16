@@ -23,9 +23,10 @@ const memories = fromHono(new Hono<{ Variables: Variables; Bindings: Env }>())
       })
     ),
     async (c) => {
-      const { start, count, spaceId } = c.req.valid("query");
-      const user = c.get("user");
-      const db = database(c.env.HYPERDRIVE.connectionString);
+      try {
+        const { start, count, spaceId } = c.req.valid("query");
+        const user = c.get("user");
+        const db = database(c.env.HYPERDRIVE.connectionString);
 
       console.log("Fetching memories with spaceId", spaceId);
       console.log(c.req.url);
@@ -154,6 +155,10 @@ const memories = fromHono(new Hono<{ Variables: Variables; Bindings: Env }>())
         })),
         total,
       });
+      } catch (error) {
+        console.error("Error in memories route:", error);
+        return c.json({ error: "Internal server error" }, 500);
+      }
     }
   )
   .get("/:id", zValidator("param", z.object({ id: z.string() })), async (c) => {

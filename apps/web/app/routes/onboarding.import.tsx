@@ -46,7 +46,6 @@ export default function Onboarding() {
 	const [hasInteracted, setHasInteracted] = useState(false);
 	const [extensionPresent, setExtensionPresent] = useState(false);
 
-	if (typeof window === "undefined") return null;
 
 	useEffect(() => {
 		setTheme(Theme.DARK);
